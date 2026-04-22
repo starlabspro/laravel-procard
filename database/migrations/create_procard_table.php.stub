@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('procard_transactions', function (Blueprint $table) {
+            $table->id();
+            $table->string('order_id')->unique();
+            $table->string('order_description')->nullable();
+            $table->decimal('amount', 12, 2);
+            $table->string('currency', 3)->default('EUR');
+            $table->unsignedTinyInteger('status')->default(0);
+            $table->string('procard_transaction_id')->nullable();
+            $table->string('payer_email')->nullable();
+            $table->string('card_pan')->nullable();
+            $table->string('card_type', 32)->nullable();
+            $table->string('language', 5)->nullable();
+            $table->string('reason')->nullable();
+            $table->string('reason_code', 32)->nullable();
+            $table->json('raw_response')->nullable();
+            $table->timestamp('completed_at')->nullable();
+            $table->timestamps();
+
+            $table->index('order_id');
+            $table->index('procard_transaction_id');
+            $table->index('status');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('procard_transactions');
+    }
+};

@@ -1,0 +1,4 @@
+parameters:
+    ignoreErrors:
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
