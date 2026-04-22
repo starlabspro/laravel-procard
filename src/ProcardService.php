@@ -36,9 +36,9 @@ class ProcardService
         $this->baseUrl = config('procard.base_url');
         $this->merchantId = config('procard.merchant_id');
         $this->secretKey = config('procard.secret_key');
-        $this->currency = config('procard.currency', 'EUR');
-        $this->language = config('procard.language', 'ua');
-        $this->httpTimeout = (int) config('procard.http.timeout', 15);
+        $this->currency = config('procard.currency');
+        $this->language = config('procard.language');
+        $this->httpTimeout = config('procard.http.timeout');
         $this->defaultData = [
             'currency_iso' => $this->currency,
             'language' => $this->language,
@@ -95,6 +95,10 @@ class ProcardService
     ): array {
         $this->ensureCredentials();
 
+        if (empty($this->baseUrl)) {
+            throw ProcardException::configMissing('base_url');
+        }
+
         $transaction = $this->createTransaction($orderId, $amount, $description, $email, $extraData);
 
         $payload = $this->buildRequestPayload([
@@ -104,13 +108,11 @@ class ProcardService
             'email' => $email,
         ] + $extraData);
 
-        $response = $this->sendPurchaseRequest($payload);
-
         return [
-            'payment_url' => $response['url'],
+            'payment_url' => $this->baseUrl,
+            'payment_fields' => $payload,
             'transaction_id' => $transaction->id,
             'order_id' => $orderId,
-            'response' => $response,
         ];
     }
 
@@ -176,11 +178,12 @@ class ProcardService
             throw ProcardException::invalidResponse('Response body is not JSON.');
         }
 
-        if (isset($body['result']) && (int) $body['result'] !== 0) {
-            $message = $body['message'] ?? 'unknown error';
-            $code = $body['code'] ?? $body['result'];
+        $errorCode = $body['result'] ?? $body['code'] ?? null;
 
-            throw ProcardException::requestFailed("Procard returned error {$code}: {$message}");
+        if ($errorCode !== null && (int) $errorCode !== 0) {
+            $message = $body['message'] ?? 'unknown error';
+
+            throw ProcardException::requestFailed("Procard returned error {$errorCode}: {$message}");
         }
 
         if (empty($body['url'])) {
@@ -197,6 +200,22 @@ class ProcardService
         ?string $email = null,
         array $extraData = [],
     ): ProcardTransaction {
+        $existing = ProcardTransaction::where('order_id', $orderId)
+            ->where('status', PaymentStatus::REGISTERED)
+            ->first();
+
+        if ($existing) {
+            $existing->update([
+                'amount' => $amount,
+                'order_description' => $description,
+                'currency' => $extraData['currency'] ?? $this->currency,
+                'payer_email' => $email,
+                'language' => $extraData['language'] ?? null,
+            ]);
+
+            return $existing;
+        }
+
         return ProcardTransaction::create([
             'order_id' => $orderId,
             'order_description' => $description,
