@@ -8,6 +8,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Starlabs\LaravelProcard\DTOs\PaymentResult;
 use Starlabs\LaravelProcard\Enums\PaymentStatus;
@@ -263,17 +264,47 @@ class ProcardService
         $provided = $data['merchantSignature'] ?? null;
 
         if (! is_string($provided) || $provided === '') {
+            Log::warning('[Procard] callback missing merchantSignature', [
+                'keys' => array_keys($data),
+            ]);
+
             return false;
         }
 
-        $expected = $this->calculateSignature([
-            (string) $this->merchantId,
-            (string) ($data['orderReference'] ?? ''),
-            self::formatAmount((float) ($data['amount'] ?? 0)),
-            (string) ($data['currency'] ?? ''),
+        $orderReference = (string) ($data['orderReference'] ?? '');
+        $currency = (string) ($data['currency'] ?? '');
+        $rawAmount = (string) ($data['amount'] ?? '');
+        $strippedAmount = self::formatAmount((float) ($data['amount'] ?? 0));
+
+        $candidates = [
+            'stripped' => [(string) $this->merchantId, $orderReference, $strippedAmount, $currency],
+            'raw' => [(string) $this->merchantId, $orderReference, $rawAmount, $currency],
+        ];
+
+        foreach ($candidates as $variant => $parts) {
+            $expected = $this->calculateSignature($parts);
+
+            if (hash_equals($expected, $provided)) {
+                if ($variant !== 'stripped') {
+                    Log::info('[Procard] callback signature matched with variant', [
+                        'variant' => $variant,
+                        'parts' => $parts,
+                    ]);
+                }
+
+                return true;
+            }
+        }
+
+        Log::warning('[Procard] callback signature mismatch', [
+            'provided' => $provided,
+            'expected_stripped' => $this->calculateSignature($candidates['stripped']),
+            'expected_raw' => $this->calculateSignature($candidates['raw']),
+            'stripped_string' => implode(';', $candidates['stripped']),
+            'raw_string' => implode(';', $candidates['raw']),
         ]);
 
-        return hash_equals($expected, $provided);
+        return false;
     }
 
     public function calculateSignature(array $parts): string
