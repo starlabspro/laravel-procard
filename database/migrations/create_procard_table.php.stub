@@ -12,7 +12,8 @@ return new class extends Migration
     {
         Schema::create('procard_transactions', function (Blueprint $table) {
             $table->id();
-            $table->string('order_id')->unique();
+            $table->string('order_id');
+            $table->string('external_order_id')->nullable()->unique();
             $table->string('order_description')->nullable();
             $table->decimal('amount', 12, 2);
             $table->string('currency', 3)->default('EUR');

@@ -8,6 +8,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Starlabs\LaravelProcard\DTOs\PaymentResult;
 use Starlabs\LaravelProcard\Enums\PaymentStatus;
 use Starlabs\LaravelProcard\Events\PaymentReceived;
@@ -102,7 +103,7 @@ class ProcardService
         $transaction = $this->createTransaction($orderId, $amount, $description, $email, $extraData);
 
         $payload = $this->buildRequestPayload([
-            'order_id' => $orderId,
+            'order_id' => $transaction->external_order_id,
             'amount' => $amount,
             'description' => $description,
             'email' => $email,
@@ -113,6 +114,7 @@ class ProcardService
             'payment_fields' => $payload,
             'transaction_id' => $transaction->id,
             'order_id' => $orderId,
+            'external_order_id' => $transaction->external_order_id,
         ];
     }
 
@@ -200,24 +202,9 @@ class ProcardService
         ?string $email = null,
         array $extraData = [],
     ): ProcardTransaction {
-        $existing = ProcardTransaction::where('order_id', $orderId)
-            ->where('status', PaymentStatus::REGISTERED)
-            ->first();
-
-        if ($existing) {
-            $existing->update([
-                'amount' => $amount,
-                'order_description' => $description,
-                'currency' => $extraData['currency'] ?? $this->currency,
-                'payer_email' => $email,
-                'language' => $extraData['language'] ?? null,
-            ]);
-
-            return $existing;
-        }
-
         return ProcardTransaction::create([
             'order_id' => $orderId,
+            'external_order_id' => $this->generateExternalOrderId($orderId),
             'order_description' => $description,
             'amount' => $amount,
             'currency' => $extraData['currency'] ?? $this->currency,
@@ -225,6 +212,15 @@ class ProcardService
             'payer_email' => $email,
             'language' => $extraData['language'] ?? null,
         ]);
+    }
+
+    protected function generateExternalOrderId(string $orderId): string
+    {
+        do {
+            $candidate = $orderId . '-' . Str::upper(Str::random(8));
+        } while (ProcardTransaction::where('external_order_id', $candidate)->exists());
+
+        return $candidate;
     }
 
     public function handleCallback(Request $request): PaymentResult
@@ -237,8 +233,12 @@ class ProcardService
             throw ProcardException::callbackValidationFailed('Invalid merchantSignature.');
         }
 
-        $result = PaymentResult::fromCallbackData($data);
         $transaction = $this->resolveTransaction($data);
+
+        $result = PaymentResult::fromCallbackData(
+            $data,
+            internalOrderId: $transaction?->order_id,
+        );
 
         if ($transaction) {
             $transaction->update([
@@ -311,13 +311,14 @@ class ProcardService
 
     protected function resolveTransaction(array $data): ?ProcardTransaction
     {
-        $orderId = $data['orderReference'] ?? null;
+        $reference = $data['orderReference'] ?? null;
 
-        if (! $orderId) {
+        if (! $reference) {
             return null;
         }
 
-        return ProcardTransaction::findByOrderId((string) $orderId);
+        return ProcardTransaction::findByExternalOrderId((string) $reference)
+            ?? ProcardTransaction::findByOrderId((string) $reference);
     }
 
     protected function updateTransactionStatus(ProcardTransaction $transaction, PaymentStatus $status): void

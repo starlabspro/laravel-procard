@@ -41,12 +41,12 @@ class PaymentResult
         return $this->status === PaymentStatus::NEEDS_CLARIFICATION;
     }
 
-    public static function fromCallbackData(array $data): self
+    public static function fromCallbackData(array $data, ?string $internalOrderId = null): self
     {
         return new self(
             status: PaymentStatus::fromCallbackStatus((string) ($data['transactionStatus'] ?? '')),
             transactionId: isset($data['transactionId']) ? (string) $data['transactionId'] : null,
-            orderId: $data['orderReference'] ?? null,
+            orderId: $internalOrderId ?? ($data['orderReference'] ?? null),
             amount: isset($data['amount']) ? (float) $data['amount'] : null,
             currency: $data['currency'] ?? null,
             cardPan: $data['cardPan'] ?? null,

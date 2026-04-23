@@ -117,45 +117,57 @@ class ProcardServiceTest extends TestCase
     }
 
     #[Test]
-    public function initiate_hits_procard_endpoint_and_returns_payment_url(): void
+    public function initiate_returns_signed_form_fields_and_base_url(): void
     {
         Event::fake();
-
-        Http::fake([
-            '*procard-ltd.com/api/*' => Http::response([
-                'result' => 0,
-                'url' => 'https://procard-ltd.com/payment/pay?payment=abc',
-            ]),
-        ]);
+        Http::preventStrayRequests();
 
         $service = new ProcardService;
         $result = $service->initiate(
             orderId: 'ORDER-HTTP-1',
             amount: 50.00,
-            description: 'Test HTTP order',
+            description: 'Test order',
             email: 'buyer@example.com',
         );
 
-        $this->assertSame('https://procard-ltd.com/payment/pay?payment=abc', $result['payment_url']);
+        $this->assertSame('https://example.procard-ltd.com/api/', $result['payment_url']);
         $this->assertSame('ORDER-HTTP-1', $result['order_id']);
         $this->assertNotNull($result['transaction_id']);
+        $this->assertStringStartsWith('ORDER-HTTP-1-', $result['external_order_id']);
 
-        Http::assertSent(function ($request) {
-            $body = $request->data();
-
-            return $body['operation'] === 'Purchase'
-                && $body['order_id'] === 'ORDER-HTTP-1'
-                && $body['amount'] === '50'
-                && $body['currency_iso'] === 'EUR'
-                && ! empty($body['signature']);
-        });
+        $fields = $result['payment_fields'];
+        $this->assertSame('Purchase', $fields['operation']);
+        $this->assertSame($result['external_order_id'], $fields['order_id']);
+        $this->assertSame('50', $fields['amount']);
+        $this->assertSame('EUR', $fields['currency_iso']);
+        $this->assertNotEmpty($fields['signature']);
     }
 
     #[Test]
-    public function initiate_throws_when_procard_returns_error_result(): void
+    public function initiate_twice_for_same_order_produces_distinct_external_order_ids(): void
     {
         Event::fake();
 
+        $service = new ProcardService;
+
+        $first = $service->initiate(
+            orderId: 'INV-DUP-1',
+            amount: 10.00,
+            description: 'First attempt',
+        );
+        $second = $service->initiate(
+            orderId: 'INV-DUP-1',
+            amount: 10.00,
+            description: 'Second attempt',
+        );
+
+        $this->assertNotSame($first['external_order_id'], $second['external_order_id']);
+        $this->assertSame(2, ProcardTransaction::where('order_id', 'INV-DUP-1')->count());
+    }
+
+    #[Test]
+    public function send_purchase_request_throws_when_procard_returns_error_result(): void
+    {
         Http::fake([
             '*procard-ltd.com/api/*' => Http::response([
                 'result' => 1,
@@ -168,11 +180,13 @@ class ProcardServiceTest extends TestCase
         $this->expectExceptionMessage('Procard returned error 99: Invalid signature');
 
         $service = new ProcardService;
-        $service->initiate(
-            orderId: 'ORDER-ERR-1',
-            amount: 10.00,
-            description: 'Err',
-        );
+        $service->sendPurchaseRequest([
+            'merchant_id' => 'MERCH-TEST',
+            'order_id' => 'ORDER-ERR-1',
+            'amount' => '10',
+            'currency_iso' => 'EUR',
+            'description' => 'Err',
+        ]);
     }
 
     #[Test]

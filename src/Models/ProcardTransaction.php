@@ -14,6 +14,7 @@ use Starlabs\LaravelProcard\Events\PaymentDeclined;
 /**
  * @property int $id
  * @property string $order_id
+ * @property string|null $external_order_id
  * @property string|null $order_description
  * @property float $amount
  * @property string $currency
@@ -34,6 +35,7 @@ class ProcardTransaction extends Model
 {
     protected $fillable = [
         'order_id',
+        'external_order_id',
         'order_description',
         'amount',
         'currency',
@@ -115,6 +117,11 @@ class ProcardTransaction extends Model
     public static function findByOrderId(string $orderId): ?self
     {
         return static::where('order_id', $orderId)->first();
+    }
+
+    public static function findByExternalOrderId(string $externalOrderId): ?self
+    {
+        return static::where('external_order_id', $externalOrderId)->first();
     }
 
     public static function findByProcardTransactionId(string $transactionId): ?self

@@ -37,6 +37,17 @@ class PaymentResultTest extends TestCase
     }
 
     #[Test]
+    public function it_prefers_internal_order_id_when_provided(): void
+    {
+        $result = PaymentResult::fromCallbackData(
+            ['transactionStatus' => 'Approved', 'orderReference' => 'EXT-REF-abc'],
+            internalOrderId: 'INV-2026-0001',
+        );
+
+        $this->assertSame('INV-2026-0001', $result->orderId);
+    }
+
+    #[Test]
     public function it_has_status_check_methods(): void
     {
         $completed = PaymentResult::fromCallbackData(['transactionStatus' => 'Approved']);
