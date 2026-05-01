@@ -234,7 +234,7 @@ class ProcardService
 
         $code = $body['code'] ?? null;
 
-        if ((int) $code !== 1) {
+        if (! in_array((int) $code, [0, 1], true)) {
             $message = $body['message'] ?? 'unknown error';
 
             throw ProcardException::requestFailed("Procard reverse returned error {$code}: {$message}");
