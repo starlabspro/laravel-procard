@@ -8,14 +8,12 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Starlabs\LaravelProcard\DTOs\PaymentResult;
 use Starlabs\LaravelProcard\Enums\PaymentStatus;
 use Starlabs\LaravelProcard\Events\PaymentReceived;
 use Starlabs\LaravelProcard\Exceptions\ProcardException;
 use Starlabs\LaravelProcard\Models\ProcardTransaction;
-use Throwable;
 
 class ProcardService
 {
@@ -264,10 +262,6 @@ class ProcardService
         $provided = $data['merchantSignature'] ?? null;
 
         if (! is_string($provided) || $provided === '') {
-            Log::warning('[Procard] callback missing merchantSignature', [
-                'keys' => array_keys($data),
-            ]);
-
             return false;
         }
 
