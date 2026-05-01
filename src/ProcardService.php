@@ -194,6 +194,55 @@ class ProcardService
         return $body;
     }
 
+    public function reverseOrder(string $orderId): array
+    {
+        $this->ensureCredentials();
+
+        if (empty($this->baseUrl)) {
+            throw ProcardException::configMissing('base_url');
+        }
+
+        $payload = [
+            'merchant_id' => $this->merchantId,
+            'order_id' => $orderId,
+            'signature' => $this->calculateSignature([
+                (string) $this->merchantId,
+                $orderId,
+            ]),
+        ];
+
+        try {
+            $response = Http::timeout($this->httpTimeout)
+                ->acceptJson()
+                ->asJson()
+                ->post(rtrim((string) $this->baseUrl, '/').'/reverse', $payload);
+        } catch (ConnectionException $e) {
+            throw ProcardException::requestFailed($e->getMessage());
+        }
+
+        try {
+            $response->throw();
+        } catch (RequestException $e) {
+            throw ProcardException::requestFailed($e->getMessage());
+        }
+
+        $body = $response->json();
+
+        if (! is_array($body)) {
+            throw ProcardException::invalidResponse('Response body is not JSON.');
+        }
+
+        $code = $body['code'] ?? null;
+
+        if ((int) $code !== 1) {
+            $message = $body['message'] ?? 'unknown error';
+
+            throw ProcardException::requestFailed("Procard reverse returned error {$code}: {$message}");
+        }
+
+        return $body;
+    }
+
     public function checkStatus(string $orderId): array
     {
         $this->ensureCredentials();
