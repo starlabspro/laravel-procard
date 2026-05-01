@@ -281,28 +281,11 @@ class ProcardService
             'raw' => [(string) $this->merchantId, $orderReference, $rawAmount, $currency],
         ];
 
-        foreach ($candidates as $variant => $parts) {
-            $expected = $this->calculateSignature($parts);
-
-            if (hash_equals($expected, $provided)) {
-                if ($variant !== 'stripped') {
-                    Log::info('[Procard] callback signature matched with variant', [
-                        'variant' => $variant,
-                        'parts' => $parts,
-                    ]);
-                }
-
+        foreach ($candidates as $parts) {
+            if (hash_equals($this->calculateSignature($parts), $provided)) {
                 return true;
             }
         }
-
-        Log::warning('[Procard] callback signature mismatch', [
-            'provided' => $provided,
-            'expected_stripped' => $this->calculateSignature($candidates['stripped']),
-            'expected_raw' => $this->calculateSignature($candidates['raw']),
-            'stripped_string' => implode(';', $candidates['stripped']),
-            'raw_string' => implode(';', $candidates['raw']),
-        ]);
 
         return false;
     }
