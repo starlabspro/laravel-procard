@@ -152,6 +152,25 @@ Disable auto-routes:
 PROCARD_ROUTES_ENABLED=false
 ```
 
+## Local development
+
+The repo ships a `Dockerfile` so you can run composer and the test suite against
+a specific PHP version without installing PHP locally. It defaults to PHP 8.3,
+the minimum this package supports.
+
+```bash
+docker build -t laravel-procard:8.3 --build-arg PHP_VERSION=8.3 .
+
+docker run --rm -v "$PWD":/app laravel-procard:8.3 composer update
+docker run --rm -v "$PWD":/app laravel-procard:8.3 vendor/bin/pest
+docker run --rm -v "$PWD":/app laravel-procard:8.3 vendor/bin/phpstan analyse
+```
+
+Build with `--build-arg PHP_VERSION=8.4` or `8.5` to check the rest of the
+matrix. The image creates a user matching UID/GID 1000 so files written through
+the bind mount are not owned by root; override with `--build-arg UID=$(id -u)
+--build-arg GID=$(id -g)` if your host user differs.
+
 ## License
 
 The MIT License (MIT). See [License File](LICENSE.md).
