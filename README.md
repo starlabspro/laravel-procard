@@ -7,7 +7,7 @@ This is a **sibling package** to [`starlabspro/laravel-paysera`](https://github.
 ## Requirements
 
 - PHP 8.3+
-- Laravel 11.0+ / 12.0+ / 13.0+
+- Laravel 12.0+ / 13.0+
 - Procard merchant account (merchant id, secret key, API subdomain)
 
 ## Installation
